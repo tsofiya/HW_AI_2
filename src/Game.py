@@ -229,7 +229,10 @@ class Game:
 
     def pos_feasible_on_board(self, pos):
         # on board
-        on_board = (0 <= pos[0] < len(self.map) and 0 <= pos[1] < len(self.map[0]))
+        try:
+            on_board = (0 <= pos[0] < len(self.map) and 0 <= pos[1] < len(self.map[0]))
+        except:
+            print(1)
         if not on_board:
             return False
         

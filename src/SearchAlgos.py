@@ -63,4 +63,36 @@ class AlphaBeta(SearchAlgos):
         :return: A tuple: (The min max algorithm value, The direction in case of max node or None in min mode)
         """
         #TODO: erase the following line and implement this function.
-        raise NotImplementedError
+        if depth == 0:
+            return self.utility(state)
+        if not self.goal == None and self.goal(state):
+            return state.Score, (0, 0)
+        next_move: tuple = (0, 0)
+        promised_score: float = float('-inf') if maximizing_player else float('inf')
+        curr_max= float('-inf')
+        curr_min= float('inf')
+        for dir, succ in self.succ(state):
+            score, move = self.search(succ, depth - 1, not maximizing_player, alpha, beta)
+            if maximizing_player and score > promised_score:
+                promised_score = score
+                next_move = dir
+                if (curr_max<score):
+                    curr_max= score
+                if curr_max>=alpha:
+                    alpha= curr_max
+                if curr_max>= beta:
+                    return float('inf'), None
+            elif not maximizing_player and score < promised_score:
+                promised_score = score
+                next_move = None
+                if (curr_min>score):
+                    curr_min= score
+                if curr_min >= beta:
+                    beta= curr_min
+                if curr_min <= alpha:
+                    return float('-inf'), None
+
+        if maximizing_player:
+            return curr_max, next_move
+        return curr_min, None
+

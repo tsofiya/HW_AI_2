@@ -30,6 +30,7 @@ class Player(AbstractPlayer):
         self.rival_score = 0
         self.minimax = MiniMax(self.utility_function, self.succ_generator,
                                self.make_move, self.is_goal)
+        self.fruit_dict = {}
         #TODO: edit MiniMax init params
         #TODO: initialize more fields, if needed, and the Minimax algorithm from SearchAlgos.py
 
@@ -47,6 +48,7 @@ class Player(AbstractPlayer):
         self.rival_position = tuple(np.array(np.where(board == 2)).reshape(-1).tolist())
         self.my_score = 0
         self.rival_score = 0
+        self.find_fruits()
 
 
     def make_move(self, time_limit, players_score):
@@ -56,16 +58,18 @@ class Player(AbstractPlayer):
         output:
             - direction: tuple, specifing the Player's movement, chosen from self.directions
         """
+        #time_limit =10
         start_time = time.time()
         curr_state = State(self.board, self.position,
                            self.my_score, self.rival_position, self.rival_score, True)
-        i=2
+        i=1
         score,operator = self.minimax.search(curr_state, i, True)
         end_time = time.time()
         last_search_time= end_time-start_time
         total_minimax_time = end_time-start_time
-        while (time_limit - total_minimax_time)/2 > last_search_time**2:
-             i+=2
+        max_len= len(self.board[0])+len(self.board)#max (len(self.board[0]), len(self.board))
+        while (time_limit - total_minimax_time) > last_search_time**3 and i<max_len:
+             i+=1
              start_in_loop = time.time()
              score,operator = self.minimax.search(curr_state, i, True)
              end_time = time.time()
@@ -74,7 +78,8 @@ class Player(AbstractPlayer):
         self.board[self.position] = -1
         pos = (self.position[0]+operator[0], self.position[1]+operator[1])
         self.board[pos] = 1
-        self.position= pos
+        self.position = pos
+        self.update_fruits({})
         return operator
 
 
@@ -88,10 +93,8 @@ class Player(AbstractPlayer):
         self.board[self.rival_position] = -1
         self.rival_position = pos
         self.rival_score += self.board[pos]
-
+        self.update_fruits({})
         self.board[pos] = 2
-
-
 
 
     def update_fruits(self, fruits_on_board_dict):
@@ -103,11 +106,21 @@ class Player(AbstractPlayer):
         No output is expected.
         """
         #TODO: erase the following line and implement this function. In case you choose not to use it, use 'pass' instead of the following line.
-        pass
+        if self.position in self.fruit_dict.keys():
+            self.fruit_dict.pop(self.position)
+        if self.rival_position in self.fruit_dict.keys():
+            self.fruit_dict.pop(self.rival_position)
+
 
 
     ########## helper functions in class ##########
     #TODO: add here helper functions in class, if needed
+    def find_fruits(self):
+        for i in range(len(self.board)):
+            for j in range(len(self.board[0])):
+                if self.board[i][j] >0:
+                    self.fruit_dict[(i,j)]=self.board[i][j]
+
 
 
 
@@ -150,40 +163,58 @@ class Player(AbstractPlayer):
     def is_goal(self, state):
         board = state.Board
         pos = state.Position
-        rival_pos = state.Rival_Position
         can_move = False
-        rival_can_move = False
         for direction in utils.get_directions():
             next_pos = (pos[0] + direction[0], pos[1] + direction[1])
-            rival_next_pos = (rival_pos[0] + direction[0], rival_pos[1] + direction[1])
             can_move = can_move or self.pos_feasible_on_board(board, next_pos)
-            rival_can_move = rival_can_move or self.pos_feasible_on_board(board, rival_next_pos)
 
-        return not (can_move and rival_can_move)
+        return not can_move
 
     def utility_function(self, state: State):
         if self.is_goal(state):
-            return state.Score, (0, 0)
+            return state.Score-self.penalty_score - state.Rival_Score, (0, 0)
         return self.heuristic(state)
 
     def heuristic(self, state: State):
-        best_path = []
-        board = state.Board
-        pos = state.Position
+        closest_fruit_direction= (0,0)
+        closest_fruit_distance= float('inf')
+        curr_pos = state.Position
+        curr_rival_pos= state.Rival_Position
+        fruit_value = 0
+        count_feasble_directions = 0
+        count_feasble_directions_rival = 0
         for direction in utils.get_directions():
-            x = pos[0] + direction[0]
-            y = pos[1] + direction[1]
-            if (x < len(board) and y < len(board[0])):
-                if self.board[x][y] >= 0:
-                    best_path.append((direction, self.board[x][y]))
-        if len(best_path) == 0:
-            return state.Score - self.penalty_score, (0, 0)
-        best_path.sort(key=lambda x: x[1])
-        best_direction, best_price = best_path.pop()
-        best_pos = pos + best_direction
-        if self.calc_dist(best_pos, self.rival_position) > 1:
-            return best_price, best_direction
-        return best_price, best_direction
+            pos = curr_pos[0] + direction[0], curr_pos[1] + direction[1]
+            rival_pos= curr_rival_pos[0] + direction[0], curr_rival_pos[1] + direction[1]
+            if self.pos_feasible_on_board(state.Board, rival_pos):
+                count_feasble_directions_rival+=1
+            if self.pos_feasible_on_board(state.Board, pos):
+                if closest_fruit_direction == (0, 0):
+                    closest_fruit_direction = direction
+                count_feasble_directions += 1
+                for key in self.fruit_dict:
+                    dist = self.calc_dist(pos, key)
+                    if dist < closest_fruit_distance:
+                        closest_fruit_direction = direction
+                        closest_fruit_distance = dist
+                        fruit_value= self.fruit_dict[key]
+
+        if count_feasble_directions_rival== 0:
+            return state.Score + fruit_value + self.penalty_score + self.rival_score, closest_fruit_direction
+        if count_feasble_directions_rival == 0:
+            return state.Score + fruit_value + self.penalty_score - self.rival_score, closest_fruit_direction
+
+        if closest_fruit_distance == float('inf'):
+            if count_feasble_directions-count_feasble_directions_rival > 0:
+                return state.Score - self.penalty_score/2-self.rival_score, closest_fruit_direction
+            else:
+                return state.Score - self.rival_score, closest_fruit_direction
+
+        if count_feasble_directions-count_feasble_directions_rival > 0:
+            return state.Score + fruit_value - self.penalty_score/2 - self.rival_score, closest_fruit_direction
+        else:
+            return state.Score + fruit_value - self.rival_score, closest_fruit_direction
+
 
     def calc_dist(self, pos1, pos2):
         return abs(pos1[0] - pos2[0] + (pos1[1] - pos2[1]))

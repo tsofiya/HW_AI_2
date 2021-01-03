@@ -3,13 +3,34 @@ MiniMax Player with AlphaBeta pruning with light heuristic
 """
 from players.AbstractPlayer import AbstractPlayer
 #TODO: you can import more modules, if needed
+import time
+from SearchAlgos import AlphaBeta
+import numpy as np
+from dataclasses import dataclass
+from utils import get_directions
 
+@dataclass(frozen=True)
+class State:
+        Board: np.array
+        Position: tuple
+        Score: float
+        Rival_Position: tuple
+        Rival_Score: float
+        My_Turn: bool
 
 class Player(AbstractPlayer):
     def __init__(self, game_time, penalty_score):
         AbstractPlayer.__init__(self, game_time, penalty_score) # keep the inheritance of the parent's (AbstractPlayer) __init__()
-        #TODO: initialize more fields, if needed, and the AlphaBeta algorithm from SearchAlgos.py
+        self.position: tuple = None
+        self.rival_position: tuple = None
+        self.board: np.array = None
+        self.my_score = 0
+        self.rival_score = 0
+        self.alpha_beta = AlphaBeta(self.utility_function, self.succ_generator,
+                                    self.make_move, self.is_goal)
+        self.fruit_dict = {}
 
+        # TODO: initialize more fields, if needed, and the AlphaBeta algorithm from SearchAlgos.py
 
     def set_game_params(self, board):
         """Set the game parameters needed for this player.
@@ -19,8 +40,13 @@ class Player(AbstractPlayer):
             - board: np.array, a 2D matrix of the board.
         No output is expected.
         """
-        #TODO: erase the following line and implement this function.
-        raise NotImplementedError
+        # TODO: erase the following line and implement this function.
+        self.board = board
+        self.position = tuple(np.array(np.where(board == 1)).reshape(-1).tolist())
+        self.rival_position = tuple(np.array(np.where(board == 2)).reshape(-1).tolist())
+        self.my_score = 0
+        self.rival_score = 0
+        self.find_fruits()
 
     def make_move(self, time_limit, players_score):
         """Make move with this Player.
@@ -29,9 +55,29 @@ class Player(AbstractPlayer):
         output:
             - direction: tuple, specifing the Player's movement, chosen from self.directions
         """
-        #TODO: erase the following line and implement this function.
-        raise NotImplementedError
-
+        # TODO: erase the following line and implement this function.
+        start_time = time.time()
+        curr_state = State(self.board, self.position,
+                           self.my_score, self.rival_position, self.rival_score, True)
+        i = 3
+        score, operator = self.alpha_beta.search(curr_state, i, True, float('-inf'), float('inf'))
+        end_time = time.time()
+        # last_search_time = end_time - start_time
+        # total_minimax_time = end_time - start_time
+        # max_len = len(self.board[0]) + len(self.board)  # max (len(self.board[0]), len(self.board))
+        # while (time_limit - total_minimax_time) > last_search_time ** 3 and i < max_len:
+        #     i += 1
+        #     start_in_loop = time.time()
+        #     score, operator = self.alpha_beta.search(curr_state, i, True, float('-inf'), float('inf'))
+        #     end_time = time.time()
+        #     last_search_time = end_time - start_in_loop
+        #     total_minimax_time = end_time - start_time
+        self.board[self.position] = -1
+        pos = (self.position[0] + operator[0], self.position[1] + operator[1])
+        self.board[pos] = 1
+        self.position = pos
+        self.update_fruits({})
+        return operator
 
     def set_rival_move(self, pos):
         """Update your info, given the new position of the rival.
@@ -39,9 +85,12 @@ class Player(AbstractPlayer):
             - pos: tuple, the new position of the rival.
         No output is expected
         """
-        #TODO: erase the following line and implement this function.
-        raise NotImplementedError
-
+        # TODO: erase the following line and implement this function.
+        self.board[self.rival_position] = -1
+        self.rival_position = pos
+        self.rival_score += self.board[pos]
+        self.update_fruits({})
+        self.board[pos] = 2
 
     def update_fruits(self, fruits_on_board_dict):
         """Update your info on the current fruits on board (if needed).
@@ -51,14 +100,86 @@ class Player(AbstractPlayer):
                                     'value' is the value of this fruit.
         No output is expected.
         """
-        #TODO: erase the following line and implement this function. In case you choose not to use this function, 
+        # TODO: erase the following line and implement this function. In case you choose not to use this function,
         # use 'pass' instead of the following line.
-        raise NotImplementedError
+        if self.position in self.fruit_dict.keys():
+            self.fruit_dict.pop(self.position)
+        if self.rival_position in self.fruit_dict.keys():
+            self.fruit_dict.pop(self.rival_position)
 
+    def find_fruits(self):
+        for i in range(len(self.board)):
+            for j in range(len(self.board[0])):
+                if self.board[i][j] > 0:
+                    self.fruit_dict[(i, j)] = self.board[i][j]
 
-    ########## helper functions in class ##########
-    #TODO: add here helper functions in class, if needed
+        ########## helper functions for AlphaBeta algorithm ##########
+        # TODO: add here the utility, succ, and perform_move functions used in AlphaBeta algorithm
 
+    def succ_generator(self, state):
+        for direction in get_directions():
+            if state.My_Turn:
+                pos = (state.Position[0] + direction[0], state.Position[1] + direction[1])
+            else:
+                pos = (state.Rival_Position[0] + direction[0], state.Rival_Position[1] + direction[1])
+            if self.pos_feasible_on_board(state.Board, pos):
+                new_board = state.Board.copy()
+                if state.My_Turn:
+                    new_score = state.Score + new_board[pos]
+                    new_board[state.Position] = -1
+                    new_board[pos] = 1
+                    yield direction, State(new_board, pos, new_score, state.Rival_Position,
+                                           state.Rival_Score, False)
+                else:
+                    new_score = state.Rival_Score + new_board[pos]
+                    new_board[state.Position] = -1
+                    new_board[pos] = 2
+                    yield direction, State(new_board, state.Position,
+                                           state.Score, pos, new_score, True)
 
-    ########## helper functions for AlphaBeta algorithm ##########
-    #TODO: add here the utility, succ, and perform_move functions used in AlphaBeta algorithm
+    def pos_feasible_on_board(self, board, pos):
+        # on board
+        on_board = (0 <= pos[0] < len(board) and 0 <= pos[1] < len(self.board[0]))
+        if not on_board:
+            return False
+
+        # free cell
+        value_in_pos = self.board[pos[0]][pos[1]]
+        free_cell = (value_in_pos not in [-1, 1, 2])
+        return free_cell
+
+    def is_goal(self, state):
+        board = state.Board
+        pos = state.Position
+        can_move = False
+        for direction in get_directions():
+            next_pos = (pos[0] + direction[0], pos[1] + direction[1])
+            can_move = can_move or self.pos_feasible_on_board(board, next_pos)
+
+        return not can_move
+
+    def utility_function(self, state: State):
+        if self.is_goal(state):
+            return state.Score - self.penalty_score - state.Rival_Score, (0, 0)
+        return self.heuristic(state)
+
+    def heuristic(self, state: State):
+        best_move, best_move_score, best_new_pos = None, float('-inf'), None
+        for d in self.directions:
+            i = self.position[0] + d[0]
+            j = self.position[1] + d[1]
+
+            if 0 <= i < len(self.board) and 0 <= j < len(self.board[0]) and (
+                    self.board[i][j] not in [-1, 1, 2]):  # then move is legal
+                new_pos = (i, j)
+                self.board[new_pos] = 1
+
+                score = self.my_score
+                if score > best_move_score:
+                    best_move, best_move_score, best_new_pos = d, score, new_pos
+                self.board[new_pos] = 0
+        return best_move_score, best_move
+
+def calc_dist(self, pos1, pos2):
+        return abs(pos1[0] - pos2[0] + (pos1[1] - pos2[1]))
+

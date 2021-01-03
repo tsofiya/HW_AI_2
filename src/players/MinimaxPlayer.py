@@ -63,7 +63,7 @@ class Player(AbstractPlayer):
         curr_state = State(self.board, self.position,
                            self.my_score, self.rival_position, self.rival_score, True)
         i=1
-        score,operator = self.minimax.search(curr_state, i, True)
+        score, operator = self.minimax.search(curr_state, i, True)
         end_time = time.time()
         last_search_time= end_time-start_time
         total_minimax_time = end_time-start_time
@@ -199,19 +199,19 @@ class Player(AbstractPlayer):
                         closest_fruit_distance = dist
                         fruit_value= self.fruit_dict[key]
 
-        if count_feasble_directions_rival== 0:
-            return state.Score + fruit_value + self.penalty_score + self.rival_score, closest_fruit_direction
+        if count_feasble_directions_rival== 0 and count_feasble_directions==0:
+            return state.Score - self.rival_score, closest_fruit_direction
         if count_feasble_directions_rival == 0:
             return state.Score + fruit_value + self.penalty_score - self.rival_score, closest_fruit_direction
 
         if closest_fruit_distance == float('inf'):
             if count_feasble_directions-count_feasble_directions_rival > 0:
-                return state.Score - self.penalty_score/2-self.rival_score, closest_fruit_direction
+                return state.Score + self.penalty_score/2-self.rival_score, closest_fruit_direction
             else:
                 return state.Score - self.rival_score, closest_fruit_direction
 
         if count_feasble_directions-count_feasble_directions_rival > 0:
-            return state.Score + fruit_value - self.penalty_score/2 - self.rival_score, closest_fruit_direction
+            return state.Score + fruit_value + self.penalty_score/2 - self.rival_score, closest_fruit_direction
         else:
             return state.Score + fruit_value - self.rival_score, closest_fruit_direction
 
